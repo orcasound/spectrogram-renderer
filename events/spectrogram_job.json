@@ -6,6 +6,7 @@
     "fmax": 15000,
     "db_min": 10,
     "db_max": 80,
-    "cmap": "viridis"
+    "cmap": "viridis",
+    "format": "webp"
   }
 }
