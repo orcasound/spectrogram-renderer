@@ -26,7 +26,7 @@ The image is `n_fft/2` pixels high and one pixel wide per `hop_length` samples, 
 | webp | 80 | 113 KB | 0.88 s |
 | webp | 100 (lossless) | 328 KB | 1.20 s |
 
-The caller picks the file extension for `image_url` to match, since the function writes to whatever key it is given.
+The caller picks the file extension for `image_url` to match, since the function writes to whatever key it is given. WebP sides are at most 16,383 px, which at the default `hop_length` and 48 kHz is a clip of about 87 seconds; a longer clip asked for as WebP is refused before rendering.
 
 Until orcasite has switched, the previous shape (`audio_bucket`/`audio_key`, `image_bucket`/`image_key`, read and written with boto3) is also accepted; [`template.yaml`](template.yaml) keeps the S3 policy for it and both go once no caller uses them.
 

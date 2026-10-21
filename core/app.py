@@ -41,6 +41,10 @@ DEFAULTS = {
 
 CONTENT_TYPES = {"png": "image/png", "webp": "image/webp"}
 
+# WebP stores each dimension in 14 bits. At the default hop length and 48 kHz
+# a segment reaches this width at about 87 seconds; PNG has no such limit.
+WEBP_MAX_DIMENSION = 16383
+
 # ffmpeg's dB scale is relative to full scale, while the dB window orcasite's
 # images were drawn with is relative to an amplitude of 0.01 in librosa's
 # STFT. This offset lines the two up: it was fitted against a production
@@ -64,6 +68,10 @@ def make_spectrogram(job):
         sample_rate, samples = decode(audio_path, wav_path)
         width = 1 + samples // params["hop_length"]
         height = params["n_fft"] // 2
+        if params["format"] == "webp" and max(width, height) > WEBP_MAX_DIMENSION:
+            raise ValueError(
+                f"a {width}x{height} image is too large for WebP, whose sides are at most {WEBP_MAX_DIMENSION} px; ask for png"
+            )
         image = render(wav_path, params, width, height)
 
     content_type = CONTENT_TYPES[params["format"]]
