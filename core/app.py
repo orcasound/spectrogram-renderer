@@ -1,4 +1,4 @@
-"""Renders one spectrogram PNG from one audio segment, with ffmpeg.
+"""Renders one spectrogram image from one audio segment, with ffmpeg.
 
 The request says where to read the audio and where to write the image, as
 URLs; the function knows nothing about what is behind them. Render
@@ -8,8 +8,13 @@ the response echoes the ones that were applied.
     {
       "audio_url": "https://... (presigned GET)",
       "image_url": "https://... (presigned PUT), or null to render and discard",
-      "parameters": {"fmax": 15000, ...}   # optional, see DEFAULTS
+      "parameters": {"fmax": 15000, "format": "webp", ...}   # optional, see DEFAULTS
     }
+
+`format` is "png" or "webp". A WebP tile is about a fifth the size of the
+PNG at the default `quality` of 80, with no visible difference at the size
+the timeline draws it; `quality` 100 makes it lossless, at about three fifths
+of the PNG. `quality` has no effect on PNG, which is always lossless.
 
 For one release the previous shape is also accepted: `audio_bucket` and
 `audio_key`, `image_bucket` and `image_key`, read and written with boto3.
@@ -30,7 +35,11 @@ DEFAULTS = {
     "db_max": 80,
     "cmap": "viridis",
     "frequency_scale": "linear",
+    "format": "png",
+    "quality": 80,
 }
+
+CONTENT_TYPES = {"png": "image/png", "webp": "image/webp"}
 
 # ffmpeg's dB scale is relative to full scale, while the dB window orcasite's
 # images were drawn with is relative to an amplitude of 0.01 in librosa's
@@ -55,12 +64,14 @@ def make_spectrogram(job):
         sample_rate, samples = decode(audio_path, wav_path)
         width = 1 + samples // params["hop_length"]
         height = params["n_fft"] // 2
-        png = render(wav_path, params, width, height)
+        image = render(wav_path, params, width, height)
 
-    store_image(job, png)
+    content_type = CONTENT_TYPES[params["format"]]
+    store_image(job, image, content_type)
 
     return {
-        "image_size": len(png),
+        "image_size": len(image),
+        "content_type": content_type,
         "sample_rate": sample_rate,
         "width": width,
         "height": height,
@@ -98,10 +109,26 @@ def render(audio_path, params, width, height):
     graph = f"showspectrumpic={spectrum},format=gbrp,pseudocolor=preset={params['cmap']}"
     return subprocess.run(
         ["ffmpeg", "-hide_banner", "-loglevel", "error", "-i", audio_path,
-         "-lavfi", graph, "-f", "image2pipe", "-c:v", "png", "-"],
+         "-lavfi", graph, "-f", "image2pipe", *encoder(params), "-"],
         check=True,
         capture_output=True,
     ).stdout
+
+
+def encoder(params):
+    """The ffmpeg output options for the requested image format.
+
+    libwebp's default effort level is kept: level 6 saved another 8% of a
+    tile for a tenth of a second more at Lambda's CPU share, and lossless
+    output is the same size at every level.
+    """
+    if params["format"] == "png":
+        return ["-c:v", "png"]
+    if params["format"] == "webp":
+        if params["quality"] >= 100:
+            return ["-c:v", "libwebp", "-lossless", "1"]
+        return ["-c:v", "libwebp", "-quality", str(params["quality"])]
+    raise ValueError(f"unknown image format {params['format']!r}; expected one of {sorted(CONTENT_TYPES)}")
 
 
 def decode(audio_path, wav_path):
@@ -130,10 +157,10 @@ def fetch_audio(job, path):
         boto3.client("s3").download_file(job["audio_bucket"], job["audio_key"].lstrip("/"), path)
 
 
-def store_image(job, png):
+def store_image(job, image, content_type):
     if job.get("image_url"):
         request = urllib.request.Request(
-            job["image_url"], data=png, method="PUT", headers={"Content-Type": "image/png"}
+            job["image_url"], data=image, method="PUT", headers={"Content-Type": content_type}
         )
         with urllib.request.urlopen(request):
             pass
@@ -141,5 +168,5 @@ def store_image(job, png):
         import boto3
 
         boto3.client("s3").put_object(
-            Bucket=job["image_bucket"], Key=job["image_key"].lstrip("/"), Body=png, ContentType="image/png"
+            Bucket=job["image_bucket"], Key=job["image_key"].lstrip("/"), Body=image, ContentType=content_type
         )

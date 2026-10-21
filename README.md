@@ -1,8 +1,8 @@
 # spectrogram-renderer
 
-A Lambda function that renders one spectrogram PNG from one hydrophone audio segment. [Orcasite](https://github.com/orcasound/orcasite) invokes it by name, once per `AudioImage`, and stores what it answers as the image's parameters. It has no other entry point.
+A Lambda function that renders one spectrogram image from one hydrophone audio segment. [Orcasite](https://github.com/orcasound/orcasite) invokes it by name, once per `AudioImage`, and stores what it answers as the image's parameters. It has no other entry point.
 
-The whole render is one ffmpeg command ([`core/app.py`](core/app.py), `render`): `showspectrumpic` draws the spectrogram as intensity and `pseudocolor` applies matplotlib's colour ramp. The handler around it fetches the audio, probes its sample rate and duration to size the image, and stores the PNG. There is no Python beyond the standard library, so the image is the Lambda base plus a static ffmpeg, and a cold start costs about a second.
+The whole render is one ffmpeg command ([`core/app.py`](core/app.py), `render`): `showspectrumpic` draws the spectrogram as intensity and `pseudocolor` applies matplotlib's colour ramp. The handler around it fetches the audio, probes its sample rate and duration to size the image, and stores the image as PNG or WebP. There is no Python beyond the standard library, so the image is the Lambda base plus a static ffmpeg, and a cold start costs about a second.
 
 ## Contract
 
@@ -10,19 +10,29 @@ The whole render is one ffmpeg command ([`core/app.py`](core/app.py), `render`):
 {
   "audio_url": "https://… (presigned GET)",
   "image_url": "https://… (presigned PUT), or null to render and discard",
-  "parameters": {"n_fft": 1024, "hop_length": 256, "fmin": 1, "fmax": 15000, "db_min": 10, "db_max": 80, "cmap": "viridis", "frequency_scale": "linear"}
+  "parameters": {"n_fft": 1024, "hop_length": 256, "fmin": 1, "fmax": 15000, "db_min": 10, "db_max": 80, "cmap": "viridis", "frequency_scale": "linear", "format": "png", "quality": 80}
 }
 ```
 
-The function reads and writes only the URLs it is given and knows nothing about what is behind them; the caller decides where audio and images live and presigns accordingly. Every parameter is optional and defaults to what orcasite has always used, so images stay consistent with the existing archive. The response gives `image_size`, `sample_rate`, `width`, `height` and the `parameters` applied, plus the field names orcasite has stored since the first renderer.
+The function reads and writes only the URLs it is given and knows nothing about what is behind them; the caller decides where audio and images live and presigns accordingly. Every parameter is optional and defaults to what orcasite has always used, so images stay consistent with the existing archive. The response gives `image_size`, `content_type`, `sample_rate`, `width`, `height` and the `parameters` applied, plus the field names orcasite has stored since the first renderer.
 
 The image is `n_fft/2` pixels high and one pixel wide per `hop_length` samples, as the previous renderer's STFT was. `db_min`/`db_max` are the dB window relative to an amplitude of 0.01, the convention the archive was drawn with; `DB_OFFSET` in `app.py` converts it to ffmpeg's full-scale dB and was fitted against a production image, whose luminance distribution the new render reproduces to within 0.01.
+
+`format` chooses the file type, and so the `Content-Type` the image is stored with: `png` is the archive's format and is always lossless; `webp` at the default `quality` of 80 is about a fifth of the PNG's size and looks the same at the size the timeline draws a tile, and `quality` 100 makes it lossless at about three fifths of the PNG. For the production segment in [`events/spectrogram_job.json`](events/spectrogram_job.json), rendered at Lambda's CPU share:
+
+| format | quality | size | encode time |
+|---|---|---|---|
+| png | | 552 KB | 0.90 s |
+| webp | 80 | 113 KB | 0.88 s |
+| webp | 100 (lossless) | 328 KB | 1.20 s |
+
+The caller picks the file extension for `image_url` to match, since the function writes to whatever key it is given.
 
 Until orcasite has switched, the previous shape (`audio_bucket`/`audio_key`, `image_bucket`/`image_key`, read and written with boto3) is also accepted; [`template.yaml`](template.yaml) keeps the S3 policy for it and both go once no caller uses them.
 
 ## Testing
 
-[`tests/smoke.py`](tests/smoke.py) renders a synthetic AAC/MPEG-TS clip through the handler inside the built image, run as an unprivileged user with a root-owned empty `/tmp` and the CPU and memory of the deployed tier, which is how Lambda runs it. [CI](.github/workflows/ci.yml) runs it on every pull request; locally:
+[`tests/smoke.py`](tests/smoke.py) renders a synthetic AAC/MPEG-TS clip through the handler as PNG, WebP and lossless WebP inside the built image, run as an unprivileged user with a root-owned empty `/tmp` and the CPU and memory of the deployed tier, which is how Lambda runs it. [CI](.github/workflows/ci.yml) runs it on every pull request; locally:
 
 ```bash
 docker build -t spectrogram-renderer core
