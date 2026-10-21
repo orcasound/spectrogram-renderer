@@ -1,7 +1,11 @@
 {
-  "id": "spectrogram_job_example",
-  "audio_bucket": "audio-orcasound-net",
-  "audio_key": "rpi_orcasound_lab/hls/1790665213/live5238.ts",
-  "image_bucket": null,
-  "image_key": null
+  "audio_url": "https://audio-orcasound-net.s3.us-west-2.amazonaws.com/rpi_orcasound_lab/hls/1790665213/live5238.ts",
+  "image_url": null,
+  "parameters": {
+    "fmin": 1,
+    "fmax": 15000,
+    "db_min": 10,
+    "db_max": 80,
+    "cmap": "viridis"
+  }
 }
