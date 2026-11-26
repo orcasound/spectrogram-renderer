@@ -1,9 +1,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: >
-  python3.12
-
-  SAM Template for audio_viz
+  Renders one spectrogram image from one hydrophone audio segment, for orcasite.
 
 # More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 Globals:
@@ -45,7 +43,7 @@ Resources:
     Metadata:
       Dockerfile: Dockerfile
       DockerContext: ./core
-      DockerTag: python3.14-v1
+      DockerTag: python3.15-v1
 
 Outputs:
   AudioVizFunction:
