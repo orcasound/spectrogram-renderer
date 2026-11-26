@@ -1,0 +1,24 @@
+version: 2
+
+# One pull request a month covering both ecosystems, instead of one per image
+# or action each week.
+multi-ecosystem-groups:
+  monthly:
+    schedule:
+      interval: monthly
+
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    multi-ecosystem-group: monthly
+    patterns: ['*']
+
+  # The two FROM lines in core/Dockerfile: the Lambda Python base image and the
+  # static ffmpeg build. Each is pinned by tag and digest, so Dependabot proposes
+  # both a newer tag (3.16, 9.2) and a rebuild of the same tag (a new digest).
+  # CI renders a clip in the built image, so a bump that breaks ffmpeg or the
+  # runtime fails the pull request instead of the deploy.
+  - package-ecosystem: docker
+    directory: /core
+    multi-ecosystem-group: monthly
+    patterns: ['*']

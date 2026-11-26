@@ -2,7 +2,7 @@
 
 A Lambda function that renders one spectrogram image from one hydrophone audio segment. [Orcasite](https://github.com/orcasound/orcasite) invokes it by name, once per `AudioImage`, and stores what it answers as the image's parameters. It has no other entry point.
 
-The whole render is one ffmpeg command ([`core/app.py`](core/app.py), `render`): `showspectrumpic` draws the spectrogram as intensity and `pseudocolor` applies matplotlib's colour ramp. The handler around it fetches the audio, probes its sample rate and duration to size the image, and stores the image as PNG or WebP. There is no Python beyond the standard library, so the image is the Lambda base plus a static ffmpeg, and a cold start costs about a second.
+The whole render is one ffmpeg command ([`core/app.py`](core/app.py), `render`): `showspectrumpic` draws the spectrogram as intensity and `pseudocolor` applies matplotlib's colour ramp. The handler around it fetches the audio, probes its sample rate and duration to size the image, and stores the image as PNG or WebP. There is no Python beyond the standard library, so the image is the Lambda base plus a static ffmpeg, and a cold start costs about a second. Both come from images pinned in [`core/Dockerfile`](core/Dockerfile): the ffmpeg binaries are copied out of [`mwader/static-ffmpeg`](https://github.com/wader/static-ffmpeg). [Dependabot](.github/dependabot.yml) proposes new versions of both images and of the GitHub Actions in one pull request a month, which CI tests like any other.
 
 ## Contract
 
@@ -22,9 +22,9 @@ The image is `n_fft/2` pixels high and one pixel wide per `hop_length` samples, 
 
 | format | quality | size | encode time |
 |---|---|---|---|
-| png | | 552 KB | 0.90 s |
-| webp | 80 | 113 KB | 0.88 s |
-| webp | 100 (lossless) | 328 KB | 1.20 s |
+| png | | 552 KB | 0.96 s |
+| webp | 80 | 114 KB | 0.82 s |
+| webp | 100 (lossless) | 328 KB | 1.27 s |
 
 The caller picks the file extension for `image_url` to match, since the function writes to whatever key it is given. WebP sides are at most 16,383 px, which at the default `hop_length` and 48 kHz is a clip of about 87 seconds; a longer clip asked for as WebP is refused before rendering.
 

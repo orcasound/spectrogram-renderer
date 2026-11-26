@@ -131,7 +131,10 @@ def encoder(params):
     output is the same size at every level.
     """
     if params["format"] == "png":
-        return ["-c:v", "png"]
+        # No prediction filter: a spectrogram is mostly noise, which Paeth,
+        # the documented default, makes half as large again. ffmpeg 7 used
+        # none whatever its help said, and the archive was drawn that way.
+        return ["-c:v", "png", "-pred", "none"]
     if params["format"] == "webp":
         if params["quality"] >= 100:
             return ["-c:v", "libwebp", "-lossless", "1"]
